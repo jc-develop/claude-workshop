@@ -23,7 +23,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 
   try {
-    const event = await loadEventOr403(supabase, Number(id), guard.user, "edit");
+    const event = await loadEventOr403(supabase, Number(id), guard.user, "survey");
     const result = await sendEventSurvey(supabase, event);
     if (!result.ok) {
       return NextResponse.json({ error: NOT_SENT_MESSAGES[result.reason] }, { status: 400 });

@@ -48,4 +48,16 @@ describe("POST /api/events/[id]/survey/send", () => {
     expect(loadEventOr403).not.toHaveBeenCalled();
     expect(sendEventSurvey).not.toHaveBeenCalled();
   });
+
+  // Both survey routes have to ask the matrix the same question, or a later
+  // widening of `edit` silently hands out the send button with it.
+  it("asks for the survey capability, like the routes either side of it", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: { id: 1, role: "admin" } });
+    loadEventOr403.mockResolvedValue({ id: 1 });
+    sendEventSurvey.mockResolvedValue({ ok: true, sent: 3 });
+
+    await POST(new Request("https://app.test/api/events/1/survey/send", { method: "POST" }), params("1"));
+
+    expect(loadEventOr403).toHaveBeenCalledWith(expect.anything(), 1, expect.anything(), "survey");
+  });
 });
