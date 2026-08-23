@@ -144,7 +144,7 @@ export default function QAPanel({
     const res = await fetch(`/api/qa/module/${moduleId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, module_id: moduleId }),
+      body: JSON.stringify({ message: text }),
     });
 
     if (res.status === 429) {

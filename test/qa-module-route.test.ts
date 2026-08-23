@@ -66,7 +66,7 @@ beforeEach(() => {
 
 describe("POST /api/qa/module/[moduleId]", () => {
   it("files the question as the authenticated attendee", async () => {
-    const res = await POST(jsonRequest("POST", { message: "hello", module_id: 2 }), {
+    const res = await POST(jsonRequest("POST", { message: "hello" }), {
       params: Promise.resolve({ moduleId: "2" }),
     });
 
@@ -74,8 +74,8 @@ describe("POST /api/qa/module/[moduleId]", () => {
     expect(sendQuestion).toHaveBeenCalledWith(expect.anything(), 2, 5, "hello");
   });
 
-  it("400s a message missing the module_id the schema requires", async () => {
-    const res = await POST(jsonRequest("POST", { message: "hello" }), {
+  it("400s a message with no text", async () => {
+    const res = await POST(jsonRequest("POST", { message: "" }), {
       params: Promise.resolve({ moduleId: "2" }),
     });
 

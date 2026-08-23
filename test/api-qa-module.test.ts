@@ -41,7 +41,7 @@ import { GET, POST, PATCH } from "@/app/api/qa/module/[moduleId]/route";
 
 const params = { params: Promise.resolve({ moduleId: "4" }) };
 const ATTENDEE = { id: 12, role: ROLES.ATTENDEE };
-const QUESTION = { message: "How do I start?", module_id: 4 };
+const QUESTION = { message: "How do I start?" };
 const QA_MODULE = { id: 4, module_type: "qa", is_locked: false, course_id: 7 };
 
 function post(payload: unknown) {
@@ -102,7 +102,7 @@ describe("GET /api/qa/module/[moduleId]", () => {
 
 describe("POST /api/qa/module/[moduleId]", () => {
   it("rejects an empty question before touching the service", async () => {
-    const res = await POST(post({ message: "", module_id: 4 }), params);
+    const res = await POST(post({ message: "" }), params);
 
     expect(res.status).toBe(400);
     expect(sendQuestion).not.toHaveBeenCalled();
@@ -143,6 +143,13 @@ describe("POST /api/qa/module/[moduleId]", () => {
 
   it("passes the session user and the validated question to the service", async () => {
     const res = await POST(post(QUESTION), params);
+
+    expect(res.status).toBe(201);
+    expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE.id, QUESTION.message);
+  });
+
+  it("posts to the module in the URL even when the body names another", async () => {
+    const res = await POST(post({ ...QUESTION, module_id: 999 }), params);
 
     expect(res.status).toBe(201);
     expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE.id, QUESTION.message);
