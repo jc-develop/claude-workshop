@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Reading a single email log now takes an admin, the same rank its listing has always taken. `EMAIL_LOG` records who was written to and at what address, and the table is reachable only through the service role, so the floor named in the handler is the whole of the gate. The listing asked for an admin; the detail route one path segment below it asked for a facilitator — a rank that cannot open the listing at all. Because the id in that path is a bare integer with no ownership test, a facilitator could count upwards through it and read, one record at a time, precisely the rows the listing declines to show them.
+
 - The speaker pages no longer jump as they load, and they were the worst two in the app. Each answered a request in flight with one line of centred text under the rail, then replaced it with a page the better part of a thousand pixels taller: 0.357 on the engagements list and 0.359 on an event, more than three times the budget. Both now hold their own shape while they wait — the list around the same card-grid skeleton the attendee list already uses, since what arrives is the same grid of event cards, and the event page around its own twelve-column layout, whose 400px hero card is most of the height at stake. The course builder was over-reserving in the other direction, having borrowed the listing pages' eleven rows for a page that settles some 240px shorter.
 
   Measured per route, before and after: `/speaker/events` 0.357 → 0.055, `/speaker/events/[id]` 0.359 → 0.003, and its course builder 0.064 → 0.001.
