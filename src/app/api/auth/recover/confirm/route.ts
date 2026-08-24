@@ -3,6 +3,7 @@ import { getRouteClient } from "@/shared/db/route-client";
 import { getServiceClient } from "@/shared/db/client";
 import { appBaseUrl } from "@/shared/lib/app-url";
 import { isAuthToken } from "@/modules/auth/lib/auth-token";
+import { isCrossSite } from "@/modules/auth/lib/same-origin";
 import { confirmPasswordReset } from "@/modules/auth/lib/password-reset";
 import { logAuditEvent } from "@/modules/audit/lib/log-audit-event";
 import * as userDao from "@/shared/db/dao/user.dao";
@@ -15,8 +16,7 @@ import * as userDao from "@/shared/db/dao/user.dao";
  * proxy log could carry it away, and the page works before JavaScript loads.
  */
 export async function POST(req: Request): Promise<NextResponse> {
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== req.headers.get("host")) {
+  if (isCrossSite(req)) {
     return failed("invalid_reset");
   }
 

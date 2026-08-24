@@ -15,6 +15,8 @@ vi.mock("@/shared/db/route-client", () => ({ getRouteClient }));
 
 import { POST } from "@/app/api/auth/email/cancel/route";
 
+const req = () => new Request("https://app.test/api/auth/email/cancel", { method: "POST" });
+
 const USER = {
   id: 1,
   role: ROLES.ATTENDEE,
@@ -33,7 +35,7 @@ describe("POST /api/auth/email/cancel", () => {
   it("refuses an anonymous caller", async () => {
     requireRole.mockResolvedValue({ allowed: false, error: "Unauthenticated", user: null });
 
-    const res = await POST();
+    const res = await POST(req());
 
     expect(res.status).toBe(401);
     await expect(res.json()).resolves.toEqual({ error: "Unauthenticated" });
@@ -41,7 +43,7 @@ describe("POST /api/auth/email/cancel", () => {
   });
 
   it("calls the cancel helper and answers ok", async () => {
-    const res = await POST();
+    const res = await POST(req());
 
     expect(routeRpc).toHaveBeenCalledWith("cancel_pending_email_change");
     expect(res.status).toBe(200);
@@ -51,7 +53,7 @@ describe("POST /api/auth/email/cancel", () => {
   it("answers 500 when the provider RPC errors", async () => {
     routeRpc.mockResolvedValue({ data: null, error: { message: "function gone" } });
 
-    const res = await POST();
+    const res = await POST(req());
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({
@@ -61,8 +63,8 @@ describe("POST /api/auth/email/cancel", () => {
   });
 
   it("answers ok again on a repeat cancel", async () => {
-    expect((await POST()).status).toBe(200);
-    expect((await POST()).status).toBe(200);
+    expect((await POST(req())).status).toBe(200);
+    expect((await POST(req())).status).toBe(200);
     expect(routeRpc).toHaveBeenCalledTimes(2);
   });
 });
