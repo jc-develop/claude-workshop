@@ -354,3 +354,25 @@ describe("POST /api/auth/email/send", () => {
     logged.mockRestore();
   });
 });
+
+describe("POST /api/auth/email/send refuses a cross-site caller", () => {
+  it("stops a form on another origin before the session is even read", async () => {
+    const res = await POST(send("new@example.com", { origin: "https://evil.example", host: "app.test" }));
+
+    expect(res.status).toBe(400);
+    expect(requireRole).not.toHaveBeenCalled();
+    expect(routeAuth.updateUser).not.toHaveBeenCalled();
+    expect(checkEmailChangeSendLimit).not.toHaveBeenCalled();
+  });
+
+  it("lets the app's own form through", async () => {
+    routeAuth.getUser.mockResolvedValue({ data: { user: goTrueUser() } });
+    checkEmailChangeSendLimit.mockResolvedValue({ allowed: true });
+    routeAuth.updateUser.mockResolvedValue({ error: null });
+
+    const res = await POST(send("new@example.com", { origin: "https://app.test", host: "app.test" }));
+
+    expect(res.status).toBe(200);
+    expect(routeAuth.updateUser).toHaveBeenCalled();
+  });
+});

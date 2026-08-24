@@ -1,10 +1,11 @@
 import { ROLES } from "@/shared/lib/roles";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { requireRole, courseDao, canManageEvent, liveSessionService } = vi.hoisted(() => ({
+const { requireRole, courseDao, canManageEvent, resolveCourseGrant, liveSessionService } = vi.hoisted(() => ({
   requireRole: vi.fn(),
   courseDao: { findCourseEvent: vi.fn() },
   canManageEvent: vi.fn(),
+  resolveCourseGrant: vi.fn(),
   liveSessionService: {
     getCourseHighlight: vi.fn(),
     setCourseHighlight: vi.fn(),
@@ -15,6 +16,7 @@ const { requireRole, courseDao, canManageEvent, liveSessionService } = vi.hoiste
 vi.mock("@/modules/auth/lib/role-guard", () => ({ requireRole }));
 vi.mock("@/shared/db/dao/course.dao", () => courseDao);
 vi.mock("@/modules/courses/lib/course-access", () => ({ canManageEvent }));
+vi.mock("@/modules/courses/lib/course-entitlement", () => ({ resolveCourseGrant }));
 vi.mock("@/modules/courses/lib/live-session-service", () => liveSessionService);
 vi.mock("@/shared/db/client", () => ({ getServiceClient: () => ({}) }));
 
@@ -34,12 +36,42 @@ beforeEach(() => {
   requireRole.mockResolvedValue({ allowed: true, error: null, user: SPEAKER });
   courseDao.findCourseEvent.mockResolvedValue({ id: 7, event_id: 1 });
   canManageEvent.mockResolvedValue(true);
+  resolveCourseGrant.mockResolvedValue("staff");
   liveSessionService.getCourseHighlight.mockResolvedValue(EMPTY_STATE);
   liveSessionService.setCourseHighlight.mockResolvedValue({ highlighted_lesson_id: 4 });
   liveSessionService.clearCourseHighlight.mockResolvedValue({ highlighted_lesson_id: null });
 });
 
 describe("GET /api/courses/[courseId]/live/highlight", () => {
+  it("refuses a caller with no session, and reads no state", async () => {
+    requireRole.mockResolvedValue({ allowed: false, error: "Unauthenticated", user: null });
+
+    const res = await GET(new Request("https://app.test/x"), params);
+
+    expect(res.status).toBe(401);
+    expect(liveSessionService.getCourseHighlight).not.toHaveBeenCalled();
+  });
+
+  // Course ids are sequential, so an open read reported which lesson every
+  // running event was on to anyone who asked.
+  it("refuses a signed-in caller who holds no ticket to the course", async () => {
+    resolveCourseGrant.mockResolvedValue(null);
+
+    const res = await GET(new Request("https://app.test/x"), params);
+
+    expect(res.status).toBe(403);
+    expect(liveSessionService.getCourseHighlight).not.toHaveBeenCalled();
+  });
+
+  it("admits a ticket holder, who is in the room but runs nothing", async () => {
+    resolveCourseGrant.mockResolvedValue("live");
+
+    const res = await GET(new Request("https://app.test/x"), params);
+
+    expect(res.status).toBe(200);
+    expect(liveSessionService.getCourseHighlight).toHaveBeenCalled();
+  });
+
   it("answers 404 for a course that does not exist", async () => {
     liveSessionService.getCourseHighlight.mockRejectedValue(new CourseServiceError(404, "Course not found"));
 

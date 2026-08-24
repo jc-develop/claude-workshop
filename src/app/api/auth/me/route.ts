@@ -4,6 +4,8 @@ import { getCurrentUserId } from "@/modules/auth/lib/session";
 import { requireRole } from "@/modules/auth/lib/role-guard";
 import { forbidden, guardFailure, unauthenticated } from "@/modules/auth/lib/guard-response";
 import { getServiceClient } from "@/shared/db/client";
+import { badRequest } from "@/shared/lib/api-response";
+import { SPEAKER_PROFILE_FIELDS, updateMeSchema } from "@/modules/user/lib/schemas";
 import { deleteAccount } from "@/modules/user/lib/delete-account";
 import * as userDao from "@/shared/db/dao/user.dao";
 import * as speakerDao from "@/shared/db/dao/speaker.dao";
@@ -47,29 +49,25 @@ export async function PATCH(req: Request) {
   // syncEmailFromAuth. Accepting one on this route let any authenticated caller
   // stamp an address they had not proved they own, which is what put unverified
   // addresses on the settings page and could squat one a staff invite was
-  // headed for.
-  const body: {
-    full_name?: string;
-    profile_image_url?: string | null;
-    designation?: string | null;
-    bio?: string | null;
-    linkedin_url?: string | null;
-    twitter_url?: string | null;
-    github_url?: string | null;
-    website_url?: string | null;
-  } = await req.json();
+  // headed for. The schema strips it, along with anything else unrecognised.
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+  }
+
+  const parsed = updateMeSchema.safeParse(raw);
+  if (!parsed.success) {
+    return badRequest(parsed.error);
+  }
+  const body = parsed.data;
 
   // A speaker profile is the user's own row, so it lives on the same route —
   // but only a speaker may write it. The exact role is required, not a minimum,
   // because facilitators and admins carry no speaker bio. Guard before touching
   // anything so a rejected caller never leaves half a profile updated.
-  const wantsSpeakerUpdate =
-    body.designation !== undefined ||
-    body.bio !== undefined ||
-    body.linkedin_url !== undefined ||
-    body.twitter_url !== undefined ||
-    body.github_url !== undefined ||
-    body.website_url !== undefined;
+  const wantsSpeakerUpdate = SPEAKER_PROFILE_FIELDS.some((field) => body[field] !== undefined);
   if (wantsSpeakerUpdate && guard.user.role !== ROLES.SPEAKER) {
     return forbidden();
   }

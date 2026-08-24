@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRouteClient } from "@/shared/db/route-client";
 import { appBaseUrl } from "@/shared/lib/app-url";
 import { isAuthToken } from "@/modules/auth/lib/auth-token";
+import { isCrossSite } from "@/modules/auth/lib/same-origin";
 
 /**
  * Accepts the invitation the page at /invite offers.
@@ -13,8 +14,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   // A cross-site form could otherwise submit an invitation of the attacker's
   // choosing and leave the victim's browser signed in as somebody else. The
   // token is unguessable, so this is the only exposure the POST adds.
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== req.headers.get("host")) {
+  if (isCrossSite(req)) {
     return invalid();
   }
 

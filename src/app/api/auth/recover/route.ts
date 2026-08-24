@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServiceClient } from "@/shared/db/client";
 import { emailDeliveryIsLocal } from "@/shared/integrations/email";
 import { preparePasswordReset, type RecoverStatus } from "@/modules/auth/lib/password-reset";
+import { isCrossSite } from "@/modules/auth/lib/same-origin";
 
 /**
  * Requests a password reset link.
@@ -20,8 +21,7 @@ import { preparePasswordReset, type RecoverStatus } from "@/modules/auth/lib/pas
  * transport — a production reply never carries a token.
  */
 export async function POST(req: Request): Promise<NextResponse> {
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== req.headers.get("host")) {
+  if (isCrossSite(req)) {
     return answer("invalid_request");
   }
 

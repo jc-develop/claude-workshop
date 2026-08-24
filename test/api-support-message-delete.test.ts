@@ -44,12 +44,27 @@ describe("DELETE /api/support/[messageId]", () => {
     expect(deleteMessagesByIds).not.toHaveBeenCalled();
   });
 
-  it("forbids a bystander who is not the recipient nor an admin", async () => {
+  // Answered as a message that is not there. The ids run in sequence, so a
+  // refusal that admitted the row existed was a way to count the project's
+  // support traffic without reading any of it.
+  it("hides a bystander's message behind the same 404 as a missing one", async () => {
     findMessageWithUser.mockResolvedValue({ id: 5, user_id: 9, recipient_user_id: 9 });
     findById.mockResolvedValue(null);
 
-    expect((await del("5")).status).toBe(403);
+    const res = await del("5");
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Message not found" });
     expect(deleteMessagesByIds).not.toHaveBeenCalled();
+  });
+
+  it("answers a missing message with the very same body", async () => {
+    findMessageWithUser.mockResolvedValue(null);
+
+    const res = await del("5");
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Message not found" });
   });
 
   it("lets the sender remove their own message", async () => {

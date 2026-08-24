@@ -364,23 +364,69 @@ describe("DELETE /api/support/sessions/[userId]", () => {
       params: Promise.resolve({ userId }),
     });
 
+  const purgedNothing = () => {
+    expect(chatDao.deleteSession).not.toHaveBeenCalled();
+    expect(chatDao.deleteMessagesByUser).not.toHaveBeenCalled();
+    expect(chatDao.deleteMessagesByRecipient).not.toHaveBeenCalled();
+  };
+
   it("refuses a caller with no session and deletes nothing", async () => {
-    requireMinRole.mockResolvedValue({ allowed: false, error: "Unauthenticated", user: null });
+    requireRole.mockResolvedValue({ allowed: false, error: "Unauthenticated", user: null });
 
     const res = await del();
 
     expect(res.status).toBe(401);
-    expect(chatDao.deleteSession).not.toHaveBeenCalled();
-    expect(chatDao.deleteMessagesByUser).not.toHaveBeenCalled();
-    expect(chatDao.deleteMessagesByRecipient).not.toHaveBeenCalled();
+    purgedNothing();
   });
 
-  it("purges the target's session and every message row for staff", async () => {
+  // The deletes are hard and cover every message the target ever sent or
+  // received, so this was the most destructive action in the slice behind the
+  // lowest floor in it — and no assignment check, unlike claiming or ending
+  // one case.
+  it("refuses a facilitator erasing somebody else's history", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: FACILITATOR });
+
+    const res = await del("9");
+
+    expect(res.status).toBe(403);
+    purgedNothing();
+  });
+
+  it("refuses an attendee erasing somebody else's history", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: ATTENDEE });
+
+    const res = await del("9");
+
+    expect(res.status).toBe(403);
+    purgedNothing();
+  });
+
+  it("lets anyone clear their own", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: ATTENDEE });
+
+    const res = await del(String(ATTENDEE.id));
+
+    expect(res.status).toBe(200);
+    expect(chatDao.deleteSession).toHaveBeenCalledWith({}, ATTENDEE.id);
+  });
+
+  it("purges the target's session and every message row for an admin", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: ADMIN });
+
     const res = await del();
 
     expect(res.status).toBe(200);
     expect(chatDao.deleteSession).toHaveBeenCalledWith({}, 9);
     expect(chatDao.deleteMessagesByUser).toHaveBeenCalledWith({}, 9);
     expect(chatDao.deleteMessagesByRecipient).toHaveBeenCalledWith({}, 9);
+  });
+
+  it("refuses a userId that is not a positive integer", async () => {
+    requireRole.mockResolvedValue({ allowed: true, error: null, user: ADMIN });
+
+    const res = await del("abc");
+
+    expect(res.status).toBe(400);
+    purgedNothing();
   });
 });

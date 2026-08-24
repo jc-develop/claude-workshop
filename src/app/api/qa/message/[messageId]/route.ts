@@ -14,11 +14,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ message
     return guardFailure(guard);
   }
 
-  // Reading is open to any authenticated user, like the module listing; only
-  // deletion is moderated. A panel fetches a question it just received a
-  // realtime INSERT for, and those may belong to other attendees.
+  // Scoped to the course the question belongs to, as the listing is. A panel
+  // fetches a question it just received a realtime INSERT for, and those may
+  // belong to other attendees — but only ones in a room this caller is in.
   try {
-    const message = await getQuestion(supabase, Number(messageId));
+    const message = await getQuestion(supabase, Number(messageId), guard.user);
     return NextResponse.json(message);
   } catch (err) {
     return toErrorResponse(err);

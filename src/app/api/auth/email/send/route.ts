@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/modules/auth/lib/role-guard";
 import { guardFailure } from "@/modules/auth/lib/guard-response";
+import { isCrossSite } from "@/modules/auth/lib/same-origin";
 import { checkEmailChangeSendLimit } from "@/modules/auth/lib/email-change-limit";
 import { getServiceClient } from "@/shared/db/client";
 import { getRouteClient } from "@/shared/db/route-client";
@@ -23,6 +24,13 @@ import { isSameEmail, resendCooldownRemaining } from "@/shared/lib/email";
 // from a mail budget the whole project shares. `checkEmailChangeSendLimit` is
 // the actual limit, on a ledger of our own that neither trick touches.
 export async function POST(request: Request) {
+  // The session rides in a cookie, so a form on another site could otherwise
+  // start an address change against the signed-in user and spend from the mail
+  // budget doing it. Same check the recovery and invite POSTs make.
+  if (isCrossSite(request)) {
+    return NextResponse.json({ ok: false, error: { status: 400, message: "Bad request" } }, { status: 400 });
+  }
+
   const guard = await requireRole();
   if (!guard.allowed) {
     return guardFailure(guard);
