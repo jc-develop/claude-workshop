@@ -71,7 +71,7 @@ describe("POST /api/qa/module/[moduleId]", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(sendQuestion).toHaveBeenCalledWith(expect.anything(), 2, 5, "hello");
+    expect(sendQuestion).toHaveBeenCalledWith(expect.anything(), 2, expect.objectContaining({ id: 5 }), "hello");
   });
 
   it("400s a message with no text", async () => {

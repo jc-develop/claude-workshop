@@ -27,8 +27,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ moduleI
     return guardFailure(guard);
   }
 
-  const { messages } = await listQuestions(supabase, Number(moduleId));
-  return NextResponse.json({ messages });
+  try {
+    const { messages } = await listQuestions(supabase, Number(moduleId), guard.user);
+    return NextResponse.json({ messages });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ moduleId: string }> }) {
@@ -47,7 +51,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ moduleI
   }
 
   try {
-    const message = await sendQuestion(supabase, Number(moduleId), guard.user.id, parsed.data.message);
+    const message = await sendQuestion(supabase, Number(moduleId), guard.user, parsed.data.message);
     return NextResponse.json(message, { status: 201 });
   } catch (err) {
     return toErrorResponse(err);

@@ -13,11 +13,13 @@ const {
   deleteByIds,
   facilitatorIsAssigned,
   speakerIsAssignedByUserId,
+  userHasCourseAccess,
 } = vi.hoisted(() => ({
   findModuleById: vi.fn(),
   findCourseEvent: vi.fn(),
   findCourseByModule: vi.fn(),
   setModuleLock: vi.fn(),
+  userHasCourseAccess: vi.fn(),
   listQuestionsByModule: vi.fn(),
   sendQuestion: vi.fn(),
   findById: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/shared/db/dao/course.dao", () => ({
   findCourseEvent,
   findCourseByModule,
   setModuleLock,
+  userHasCourseAccess,
 }));
 vi.mock("@/modules/courses/qa/db/qa-message.dao", () => ({
   listQuestionsByModule,
@@ -61,6 +64,8 @@ import { RATE_LIMIT_MAX } from "@/shared/lib/rate-limit";
 const supabase = {} as never;
 const QA_MODULE = { id: 4, module_type: "qa", is_locked: false, course_id: 7 };
 const COURSE = { id: 7, event_id: 9 };
+// An attendee holding a ticket to the course's event — the ordinary caller.
+const VIEWER = { id: 12, role: ROLES.ATTENDEE };
 
 async function rejectStatus(promise: Promise<unknown>, status: number): Promise<string> {
   try {
@@ -86,13 +91,14 @@ beforeEach(() => {
   deleteByIds.mockResolvedValue(true);
   facilitatorIsAssigned.mockResolvedValue(false);
   speakerIsAssignedByUserId.mockResolvedValue(false);
+  userHasCourseAccess.mockResolvedValue(true);
 });
 
 describe("listQuestions", () => {
   it("asks the DAO for the module's cursor feed at the listing size", async () => {
     listQuestionsByModule.mockResolvedValue({ messages: [{ id: 1, message: "Hi" }], nextCursor: "abc" });
 
-    const result = await listQuestions(supabase, 4);
+    const result = await listQuestions(supabase, 4, VIEWER);
 
     expect(listQuestionsByModule).toHaveBeenCalledWith(supabase, 4, { before: null, after: null, limit: 50 });
     expect(result).toEqual({ messages: [{ id: 1, message: "Hi" }], nextCursor: "abc" });
@@ -103,7 +109,7 @@ describe("getQuestion", () => {
   it("answers 404 for a message that does not exist", async () => {
     findByIdWithUser.mockResolvedValue(null);
 
-    const message = await rejectStatus(getQuestion(supabase, 42), 404);
+    const message = await rejectStatus(getQuestion(supabase, 42, VIEWER), 404);
 
     expect(message).toBe("Message not found");
   });
@@ -112,7 +118,7 @@ describe("getQuestion", () => {
     const joined = { id: 42, USER: { full_name: "Ana", role: ROLES.ATTENDEE } };
     findByIdWithUser.mockResolvedValue(joined);
 
-    await expect(getQuestion(supabase, 42)).resolves.toEqual(joined);
+    await expect(getQuestion(supabase, 42, VIEWER)).resolves.toEqual(joined);
   });
 });
 
@@ -120,7 +126,7 @@ describe("sendQuestion", () => {
   it("answers 404 for a module that does not exist", async () => {
     findModuleById.mockResolvedValue(null);
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 404);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 404);
 
     expect(message).toBe("Module not found");
     expect(sendQuestion).not.toHaveBeenCalled();
@@ -129,7 +135,7 @@ describe("sendQuestion", () => {
   it("refuses a module that is not for Q&A", async () => {
     findModuleById.mockResolvedValue({ ...QA_MODULE, module_type: "lessons" });
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 400);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 400);
 
     expect(message).toBe("Module is not a Q&A module");
     expect(sendQuestion).not.toHaveBeenCalled();
@@ -138,7 +144,7 @@ describe("sendQuestion", () => {
   it("refuses a locked Q&A", async () => {
     findModuleById.mockResolvedValue({ ...QA_MODULE, is_locked: true });
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 403);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 403);
 
     expect(message).toBe("Q&A is locked");
     expect(sendQuestion).not.toHaveBeenCalled();
@@ -150,14 +156,14 @@ describe("sendQuestion", () => {
       nextCursor: null,
     });
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 429);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 429);
 
     expect(message).toBe("Too many messages. Please slow down.");
     expect(sendQuestion).not.toHaveBeenCalled();
   });
 
   it("counts the module's own recent questions against the shared window", async () => {
-    await serviceSendQuestion(supabase, 4, 12, "Hi");
+    await serviceSendQuestion(supabase, 4, VIEWER, "Hi");
 
     expect(listQuestionsByModule).toHaveBeenCalledWith(supabase, 4, {
       before: null,
@@ -169,7 +175,7 @@ describe("sendQuestion", () => {
   it("answers 404 when the module points at a course that is gone", async () => {
     findCourseEvent.mockResolvedValue(null);
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 404);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 404);
 
     expect(message).toBe("Course not found");
     expect(sendQuestion).not.toHaveBeenCalled();
@@ -178,13 +184,13 @@ describe("sendQuestion", () => {
   it("reports a message that did not save", async () => {
     sendQuestion.mockResolvedValue(null);
 
-    const message = await rejectStatus(serviceSendQuestion(supabase, 4, 12, "Hi"), 500);
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, VIEWER, "Hi"), 500);
 
     expect(message).toBe("Failed to send message");
   });
 
   it("files the question against the event that owns the course", async () => {
-    await serviceSendQuestion(supabase, 4, 12, "Hi");
+    await serviceSendQuestion(supabase, 4, VIEWER, "Hi");
 
     expect(sendQuestion).toHaveBeenCalledWith(supabase, {
       event_id: 9,
@@ -290,5 +296,55 @@ describe("findQaModule", () => {
     const message = await rejectStatus(findQaModule(supabase, 4), 404);
 
     expect(message).toBe("Module not found");
+  });
+});
+
+// Module ids are sequential, so an unscoped read was a way to walk every
+// event's Q&A — questions and asker names included — from any account.
+describe("Q&A entitlement", () => {
+  const outsider = { id: 99, role: ROLES.ATTENDEE };
+
+  beforeEach(() => {
+    userHasCourseAccess.mockResolvedValue(false);
+  });
+
+  it("refuses a listing to someone with no ticket and no assignment", async () => {
+    const message = await rejectStatus(listQuestions(supabase, 4, outsider), 403);
+
+    expect(message).toBe("Forbidden");
+    expect(listQuestionsByModule).not.toHaveBeenCalled();
+  });
+
+  it("refuses a single message to the same caller, and reads nothing back", async () => {
+    const message = await rejectStatus(getQuestion(supabase, 42, outsider), 403);
+
+    expect(message).toBe("Forbidden");
+  });
+
+  it("refuses a post to a room the caller is not in", async () => {
+    const message = await rejectStatus(serviceSendQuestion(supabase, 4, outsider, "Hi"), 403);
+
+    expect(message).toBe("Forbidden");
+    expect(sendQuestion).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 when the module belongs to no course at all", async () => {
+    findCourseByModule.mockResolvedValue(null);
+
+    const message = await rejectStatus(listQuestions(supabase, 4, outsider), 404);
+
+    expect(message).toBe("Module not found");
+  });
+
+  it("admits a ticket holder", async () => {
+    userHasCourseAccess.mockResolvedValue(true);
+
+    await expect(listQuestions(supabase, 4, outsider)).resolves.toEqual({ messages: [], nextCursor: null });
+    expect(userHasCourseAccess).toHaveBeenCalledWith(supabase, outsider.id, COURSE.id);
+  });
+
+  it("admits staff without asking about tickets", async () => {
+    await expect(listQuestions(supabase, 4, { id: 3, role: ROLES.FACILITATOR })).resolves.toBeTruthy();
+    expect(userHasCourseAccess).not.toHaveBeenCalled();
   });
 });

@@ -145,14 +145,14 @@ describe("POST /api/qa/module/[moduleId]", () => {
     const res = await POST(post(QUESTION), params);
 
     expect(res.status).toBe(201);
-    expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE.id, QUESTION.message);
+    expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE, QUESTION.message);
   });
 
   it("posts to the module in the URL even when the body names another", async () => {
     const res = await POST(post({ ...QUESTION, module_id: 999 }), params);
 
     expect(res.status).toBe(201);
-    expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE.id, QUESTION.message);
+    expect(sendQuestion).toHaveBeenCalledWith({}, 4, ATTENDEE, QUESTION.message);
   });
 
   it("answers 404 when the module points at a course that is gone", async () => {

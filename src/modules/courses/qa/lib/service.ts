@@ -3,10 +3,36 @@ import type { Module, UserRole } from "@/shared/types";
 import * as courseDao from "@/shared/db/dao/course.dao";
 import * as qaMessageDao from "@/modules/courses/qa/db/qa-message.dao";
 import { canManageEvent } from "@/modules/courses/lib/course-access";
+import { resolveCourseGrant } from "@/modules/courses/lib/course-entitlement";
 import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX } from "@/shared/lib/rate-limit";
 import { ServiceError } from "@/shared/lib/service-error";
 
 export class QaServiceError extends ServiceError {}
+
+/** Who is asking. A Q&A is part of a course, so holding one is the same question. */
+export interface QaViewer {
+  id: number;
+  role: UserRole;
+}
+
+/**
+ * A Q&A belongs to its course, so the room's gate is the Q&A's gate: staff,
+ * assigned speakers and ticket holders, and nobody else.
+ *
+ * It lives here rather than in the three routes that need it because the reads
+ * were the ones that went without — module ids are sequential, so a listing
+ * that only checked for a session handed any signed-in caller every question
+ * ever asked, with the asker's name on it, for events they had no part in.
+ */
+export async function requireQaAccess(supabase: DbClient, moduleId: number, viewer: QaViewer): Promise<void> {
+  const course = await courseDao.findCourseByModule(supabase, moduleId);
+  if (!course) {
+    throw new QaServiceError(404, "Module not found");
+  }
+  if ((await resolveCourseGrant(supabase, viewer, course.id)) === null) {
+    throw new QaServiceError(403, "Forbidden");
+  }
+}
 
 export async function findQaModule(supabase: DbClient, moduleId: number): Promise<Module> {
   const mod = await courseDao.findModuleById(supabase, moduleId);
@@ -35,31 +61,36 @@ export async function requireQaModule(supabase: DbClient, moduleId: number): Pro
 export async function listQuestions(
   supabase: DbClient,
   moduleId: number,
+  viewer: QaViewer,
 ): Promise<{
   messages: Awaited<ReturnType<typeof qaMessageDao.listQuestionsByModule>>["messages"];
   nextCursor: string | null;
 }> {
+  await requireQaAccess(supabase, moduleId, viewer);
   return qaMessageDao.listQuestionsByModule(supabase, moduleId, { before: null, after: null, limit: 50 });
 }
 
 export async function getQuestion(
   supabase: DbClient,
   messageId: number,
+  viewer: QaViewer,
 ): Promise<NonNullable<Awaited<ReturnType<typeof qaMessageDao.findByIdWithUser>>>> {
   const message = await qaMessageDao.findByIdWithUser(supabase, messageId);
   if (!message) {
     throw new QaServiceError(404, "Message not found");
   }
+  await requireQaAccess(supabase, message.module_id, viewer);
   return message;
 }
 
 export async function sendQuestion(
   supabase: DbClient,
   moduleId: number,
-  userId: number,
+  viewer: QaViewer,
   message: string,
 ): Promise<NonNullable<Awaited<ReturnType<typeof qaMessageDao.sendQuestion>>>> {
   const mod = await requireQaModule(supabase, moduleId);
+  await requireQaAccess(supabase, moduleId, viewer);
 
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
   const { messages } = await qaMessageDao.listQuestionsByModule(supabase, moduleId, {
@@ -79,7 +110,7 @@ export async function sendQuestion(
   const created = await qaMessageDao.sendQuestion(supabase, {
     event_id: course.event_id,
     module_id: moduleId,
-    user_id: userId,
+    user_id: viewer.id,
     message,
   });
   if (!created) {
