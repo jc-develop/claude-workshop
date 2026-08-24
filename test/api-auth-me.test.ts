@@ -152,3 +152,54 @@ describe("PATCH /api/auth/me does not write the email", () => {
     expect(updateUser).toHaveBeenCalledWith(expect.anything(), "auth_123", { full_name: "Ada Lovelace" });
   });
 });
+
+describe("PATCH /api/auth/me validates the body", () => {
+  it("refuses a name of the wrong type rather than writing it", async () => {
+    const res = await PATCH(patch({ full_name: 42 }));
+
+    expect(res.status).toBe(400);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty name", async () => {
+    const res = await PATCH(patch({ full_name: "   " }));
+
+    expect(res.status).toBe(400);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses a body that is not an object", async () => {
+    const res = await PATCH(patch("full_name=Ada"));
+
+    expect(res.status).toBe(400);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses a body that is not JSON at all", async () => {
+    const res = await PATCH(new Request("https://app.test/api/auth/me", { method: "PATCH", body: "not json" }));
+
+    expect(res.status).toBe(400);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  // A speaker field of the wrong type used to reach the DAO as-is, because the
+  // annotation that described this body was erased before the request arrived.
+  it("refuses a speaker field of the wrong type before touching the profile", async () => {
+    const res = await PATCH(patch({ bio: { nested: true } }));
+
+    expect(res.status).toBe(400);
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("still tells an explicit null from an absent field", async () => {
+    findByUserId.mockResolvedValue({ id: 3 });
+    update.mockResolvedValue({ id: 3 });
+
+    const res = await PATCH(patch({ bio: null }));
+
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(expect.anything(), 3, expect.objectContaining({ bio: null }));
+  });
+});
