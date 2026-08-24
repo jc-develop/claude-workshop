@@ -20,10 +20,24 @@ const refuse = () => NextResponse.json({ error: "File not found" }, { status: 40
  * Object keys are built by the path helpers in the storage integration, which
  * never emit relative or empty segments. Anything else came from a caller
  * shaping the URL by hand.
+ *
+ * Testing the segments for an exact "." or ".." is not enough on its own. Next
+ * decodes the URL before it splits it, so a `%2F` arrives inside a segment
+ * rather than between two — `courses/1/a%2F..%2F..%2Fcourses%2F2` is a single
+ * segment that equals neither dot form, and the entitlement below reads only
+ * the first two segments, so a traversal buried in a later one is authorised
+ * against the wrong course.
+ *
+ * The separator is what makes it a traversal, so that is what is refused. A
+ * segment carrying no separator cannot climb anywhere no matter what dots it
+ * holds — and `sanitizeObjectName` only trims dots at the ends, so `my..file.pdf`
+ * is a name that really uploads and has to keep being readable.
  */
 function isSafePath(segments: string[]): boolean {
   if (segments.length === 0) return false;
-  return segments.every((s) => s.length > 0 && s !== "." && s !== ".." && !s.includes("\\") && !s.includes("\0"));
+  return segments.every(
+    (s) => s.length > 0 && !s.includes("/") && !s.includes("\\") && !s.includes("\0") && s !== "." && s !== "..",
+  );
 }
 
 /** Course material lives under `courses/{courseId}/...` — see buildCourseAssetPath. */

@@ -78,11 +78,27 @@ describe("path safety", () => {
     [["."]],
     [[]],
     [["a\\b"]],
+    // Next decodes before it splits, so an encoded slash lands *inside* a
+    // segment: these are the shapes that walked past a check for an exact
+    // "." or "..", and the entitlement only ever reads segments 0 and 1.
+    [["courses", "12", "..%2F..%2Fcourses%2F99%2Fsecret.pdf".replace(/%2F/g, "/")]],
+    [["courses", "12", "a/../../courses/99/secret.pdf"]],
+    [["courses", "12", "..", "..", "courses", "99"]],
+    [["courses", "12", "lesson..pdf/../../x"]],
+    [["courses", "12", ".."]],
   ])("refuses traversal-shaped path %j", async (segments) => {
     const res = await GET(req(), params("course_assets", segments));
 
     expect(res.status).toBe(404);
     expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  // sanitizeObjectName only trims dots at the ends, so this name really does
+  // upload — and a segment with no separator in it cannot climb anywhere.
+  it("still serves a filename with dots inside it", async () => {
+    await GET(req(), params("course_assets", ["courses", "12", "my..notes.pdf"]));
+
+    expect(createSignedUrl).toHaveBeenCalledWith("courses/12/my..notes.pdf", PRIVATE_TTL);
   });
 
   it("passes a well-formed key through unchanged", async () => {
