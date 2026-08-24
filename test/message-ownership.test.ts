@@ -240,14 +240,21 @@ describe("GET /api/support/[messageId]", () => {
     expect(res.status).toBe(200);
   });
 
-  it("refuses a bystander who is not on the conversation and not assigned", async () => {
+  // Indistinguishable from a message that is not there: the ids are
+  // sequential, so telling the two apart counted the support traffic.
+  it("refuses a bystander with the same answer a missing message gets", async () => {
     requireRole.mockResolvedValue({ allowed: true, error: null, user: user(99, ROLES.FACILITATOR) });
     findMessageWithUser.mockResolvedValue(supportMessage());
     sessionFindById.mockResolvedValue({ id: 11, user_id: 5, assigned_to: 15 });
 
-    const res = await GET_SUPPORT(req(), msgParams);
+    const refused = await GET_SUPPORT(req(), msgParams);
 
-    expect(res.status).toBe(403);
+    findMessageWithUser.mockResolvedValue(null);
+    const missing = await GET_SUPPORT(req(), msgParams);
+
+    expect(refused.status).toBe(404);
+    expect(missing.status).toBe(404);
+    await expect(refused.json()).resolves.toEqual(await missing.json());
   });
 });
 
