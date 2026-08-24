@@ -203,3 +203,29 @@ describe("PATCH /api/auth/me validates the body", () => {
     expect(update).toHaveBeenCalledWith(expect.anything(), 3, expect.objectContaining({ bio: null }));
   });
 });
+
+// The columns are text/unbounded varchar and no form sets a maxLength, so a
+// ceiling invented in the schema would refuse a profile that saved fine before
+// it existed. Validation here is about the shape of the body, not its size.
+describe("PATCH /api/auth/me does not invent a length limit", () => {
+  it("saves a long name", async () => {
+    const res = await PATCH(patch({ full_name: "A".repeat(500) }));
+
+    expect(res.status).toBe(200);
+    expect(updateUser).toHaveBeenCalledWith(expect.anything(), "auth_123", { full_name: "A".repeat(500) });
+  });
+
+  it("saves a long bio and designation", async () => {
+    findByUserId.mockResolvedValue({ id: 3 });
+    update.mockResolvedValue({ id: 3 });
+
+    const res = await PATCH(patch({ bio: "B".repeat(5000), designation: "C".repeat(500) }));
+
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.anything(),
+      3,
+      expect.objectContaining({ bio: "B".repeat(5000), designation: "C".repeat(500) }),
+    );
+  });
+});

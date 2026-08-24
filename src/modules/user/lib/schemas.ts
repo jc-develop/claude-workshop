@@ -13,12 +13,19 @@ import { z } from "zod";
  * lives in app_metadata, which only the service role writes. Unknown keys are
  * stripped rather than rejected, so a body carrying either is inert instead of
  * being an error the caller can probe.
+ *
+ * No length caps either, deliberately. `bio` is `text` and the other two are
+ * unbounded `varchar`, and no form in the app sets a maxLength — so a ceiling
+ * invented here would refuse to save a profile that was written happily
+ * yesterday. This schema is about the shape of the body, which is what the
+ * erased type annotation was failing to check; a limit on what a bio may hold
+ * is a product decision, and belongs with the column and the field together.
  */
 export const updateMeSchema = z.object({
-  full_name: z.string().trim().min(1, "Name is required").max(120, "Name too long").optional(),
+  full_name: z.string().trim().min(1, "Name is required").optional(),
   profile_image_url: z.string().nullable().optional(),
-  designation: z.string().max(120, "Designation too long").nullable().optional(),
-  bio: z.string().max(2000, "Bio too long").nullable().optional(),
+  designation: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
   linkedin_url: z.string().nullable().optional(),
   twitter_url: z.string().nullable().optional(),
   github_url: z.string().nullable().optional(),
