@@ -286,6 +286,15 @@ describe("events page tabs", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("filter=past"))).toBe(true);
   });
 
+  it("shows the server totals for both tabs on the initial render", () => {
+    render(
+      <EventListPage initial={{ rows: [{ ...events[0], status: "active" }], total: 137, tabTotals: { completed: 23 } }} />,
+    );
+
+    expect(screen.getByRole("tab", { name: /Upcoming/ }).textContent).toBe("Upcoming (137)");
+    expect(screen.getByRole("tab", { name: /Completed/ }).textContent).toBe("Completed (23)");
+  });
+
   it("counts the whole of the open tab, not the page that happens to be loaded", async () => {
     vi.stubGlobal(
       "fetch",
@@ -298,8 +307,7 @@ describe("events page tabs", () => {
     render(<EventListPage />);
     await waitFor(() => expect(screen.getByRole("tab", { name: /Upcoming/ }).textContent).toBe("Upcoming (137)"));
 
-    // The closed tab is a query nobody has run, so it carries no number rather
-    // than a stale or invented one.
+    // Without a server seed, the inactive tab is still unknown.
     expect(screen.getByRole("tab", { name: /Completed/ }).textContent).toBe("Completed");
   });
 });

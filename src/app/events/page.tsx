@@ -34,15 +34,29 @@ export default async function EventsRoute() {
   // the published listing.
   const user = await getCurrentUser(supabase);
 
-  const scope = tabScope("upcoming", false);
-  const initial = await listEvents(supabase, {
-    role: user?.role ?? null,
-    userId: user?.id ?? null,
-    filter: scope.filter ?? null,
-    statuses: scope.statuses ?? null,
-    page: 1,
-    limit: PAGE_SIZE,
-  });
+  const role = user?.role ?? null;
+  const userId = user?.id ?? null;
+  const upcomingScope = tabScope("upcoming", false);
+  const completedScope = tabScope("completed", false);
+  const [initial, completed] = await Promise.all([
+    listEvents(supabase, {
+      role,
+      userId,
+      filter: upcomingScope.filter ?? null,
+      statuses: upcomingScope.statuses ?? null,
+      page: 1,
+      limit: PAGE_SIZE,
+    }),
+    // One row is enough to obtain PostgREST's exact total for the inactive tab.
+    listEvents(supabase, {
+      role,
+      userId,
+      filter: completedScope.filter ?? null,
+      statuses: completedScope.statuses ?? null,
+      page: 1,
+      limit: 1,
+    }),
+  ]);
 
-  return <EventListPage initial={{ rows: initial.data, total: initial.total }} />;
+  return <EventListPage initial={{ rows: initial.data, total: initial.total, tabTotals: { completed: completed.total } }} />;
 }

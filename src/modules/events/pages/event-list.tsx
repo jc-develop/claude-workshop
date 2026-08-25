@@ -40,7 +40,7 @@ export function EventListPage({ initial }: { initial?: EventListSeed } = {}) {
     loadMore,
     activeTab,
     setActiveTab,
-    total,
+    tabTotals,
     search,
     setSearch,
   } = useEventList({ initial });
@@ -99,12 +99,11 @@ export function EventListPage({ initial }: { initial?: EventListSeed } = {}) {
                 activeTab === tab.key ? "bg-muted font-medium text-fg" : "text-muted-fg hover:bg-muted hover:text-fg",
               )}
             >
-              {/* Only the open tab carries a count, and it is the server's total
-                  for that tab rather than a tally of the page on screen. Each
-                  tab is its own query now, so a count beside the closed one
-                  would be a number nothing had been asked for. */}
+              {/* These are server totals rather than tallies of the rendered
+                  page. Both attendee tabs are seeded by the route, so neither
+                  badge waits for a tab click before it can render. */}
               {tab.label}
-              {activeTab === tab.key ? ` (${total})` : ""}
+              {tabTotals[tab.key] !== undefined ? ` (${tabTotals[tab.key]})` : ""}
             </button>
           ))}
         </div>

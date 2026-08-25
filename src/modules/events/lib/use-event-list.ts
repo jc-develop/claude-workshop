@@ -39,6 +39,9 @@ export function useEventList(options?: UseEventListOptions) {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState((seed?.total ?? 0) > PAGE_SIZE);
   const [total, setTotal] = useState(seed?.total ?? 0);
+  const [tabTotals, setTabTotals] = useState<Partial<Record<FilterTab, number>>>(() =>
+    seed ? { ...seed.tabTotals, upcoming: seed.total } : {},
+  );
   const [activeTab, setActiveTab] = useState<FilterTab>("upcoming");
   const [search, setSearch] = useState("");
   const pageRef = useRef(1);
@@ -124,6 +127,7 @@ export function useEventList(options?: UseEventListOptions) {
       setEvents(result.rows);
       setHasMore(result.hasMore);
       setTotal(result.total);
+      setTabTotals((previous) => ({ ...previous, [activeTab]: result.total }));
       loadedOnceRef.current = true;
       setLoading(false);
       setRefreshing(false);
@@ -140,7 +144,7 @@ export function useEventList(options?: UseEventListOptions) {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       generationRef.current++;
     };
-  }, [load, queryKey]);
+  }, [activeTab, load, queryKey]);
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current) return;
@@ -193,6 +197,8 @@ export function useEventList(options?: UseEventListOptions) {
     setActiveTab,
     /** How many events the active tab holds in total, not just on the page fetched. */
     total,
+    /** Totals available for each tab; the route seeds both attendee tabs. */
+    tabTotals,
     search,
     setSearch,
   };

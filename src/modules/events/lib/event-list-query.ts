@@ -24,6 +24,8 @@ export interface EventListItem {
 export interface EventListSeed {
   rows: EventListItem[];
   total: number;
+  /** Totals already known for tabs other than the seeded Upcoming rows. */
+  tabTotals?: Partial<Record<FilterTab, number>>;
 }
 
 export type FilterTab = "upcoming" | "completed" | "drafts";
